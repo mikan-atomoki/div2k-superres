@@ -1,0 +1,58 @@
+# HAT-L x4 Super-Resolution Configuration
+# Optimized for 8x NVIDIA A6000 (48GB)
+
+experiment:
+  name: hat_l_x4_div2k
+  seed: 42
+
+model:
+  in_chans: 3
+  embed_dim: 180
+  depths: [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]  # 12 RHAG groups
+  num_heads: [6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6]
+  window_size: 16
+  compress_ratio: 3
+  squeeze_factor: 30
+  conv_scale: 0.01
+  overlap_ratio: 0.5
+  mlp_ratio: 2.0
+  upscale: 4
+  img_range: 1.0
+  upsampler: pixelshuffle
+  resi_connection: 1conv
+  drop_rate: 0.0
+  attn_drop_rate: 0.0
+  drop_path_rate: 0.1
+
+data:
+  data_root: data/DIV2K
+  scale: 4
+  lr_patch_size: 64       # LR crop size -> 256x256 HR
+  batch_size: 8           # per GPU -> effective 256 with 8 GPUs x 4 accum
+  num_workers: 8
+  augment: true
+
+loss:
+  l1_weight: 1.0
+  perceptual_weight: 0.0  # set > 0 to enable VGG perceptual loss
+
+training:
+  max_steps: 500000       # optimizer steps
+  lr: 2.0e-4
+  betas: [0.9, 0.99]
+  weight_decay: 0.0
+  warmup_steps: 5000
+  gradient_clip_val: 1.0
+  accumulate_grad_batches: 4
+  precision: bf16-mixed
+  ema_decay: 0.999
+
+  # Logging & checkpointing
+  log_every_n_steps: 100
+  val_check_interval: 5000   # validate every N optimizer steps
+  save_top_k: 5
+
+  # Hardware
+  devices: 8
+  strategy: ddp
+  benchmark: true
