@@ -103,7 +103,7 @@ def main() -> None:
         callbacks.append(
             StochasticWeightAveraging(
                 swa_lrs=train_cfg.get("lr", 2e-4),
-                swa_epoch_start=0.0,
+                swa_epoch_start=0,
                 annealing_epochs=1,
             )
         )
