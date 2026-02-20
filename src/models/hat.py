@@ -254,7 +254,7 @@ class HAB(nn.Module):
         x = x.view(b, h, w, c)
 
         # Conv branch (channel attention)
-        conv_x = self.conv_block(x.permute(0, 3, 1, 2)).permute(0, 2, 3, 1).contiguous()
+        conv_x = self.conv_block(x.permute(0, 3, 1, 2)).permute(0, 2, 3, 1).contiguous().view(b, h * w, c)
 
         # Cyclic shift
         if self.shift_size > 0:
