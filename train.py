@@ -19,7 +19,6 @@ import torch
 from lightning.pytorch.callbacks import (
     LearningRateMonitor,
     ModelCheckpoint,
-    StochasticWeightAveraging,
 )
 from lightning.pytorch.loggers import TensorBoardLogger, WandbLogger
 from omegaconf import OmegaConf
@@ -67,6 +66,12 @@ def main() -> None:
     # Training config shortcuts
     train_cfg = config_dict["training"]
     devices = args.devices or train_cfg.get("devices", 1)
+    accum = train_cfg.get("accumulate_grad_batches", 4)
+
+    # val_check_interval is in optimizer steps in config,
+    # but Lightning counts training batches. Convert accordingly.
+    val_interval_steps = train_cfg.get("val_check_interval", 5000)
+    val_interval_batches = val_interval_steps * accum
 
     # Data module
     data_cfg = config_dict["data"]
@@ -92,21 +97,10 @@ def main() -> None:
             mode="max",
             save_top_k=train_cfg.get("save_top_k", 5),
             save_last=True,
-            every_n_train_steps=train_cfg.get("val_check_interval", 5000),
+            every_n_train_steps=val_interval_batches,
         ),
         LearningRateMonitor(logging_interval="step"),
     ]
-
-    # EMA via Stochastic Weight Averaging
-    ema_decay = train_cfg.get("ema_decay", 0.0)
-    if ema_decay > 0:
-        callbacks.append(
-            StochasticWeightAveraging(
-                swa_lrs=train_cfg.get("lr", 2e-4),
-                swa_epoch_start=1,
-                annealing_epochs=1,
-            )
-        )
 
     # Logger
     if args.wandb:
@@ -118,14 +112,16 @@ def main() -> None:
     strategy = train_cfg.get("strategy", "ddp") if devices > 1 else "auto"
     trainer = L.Trainer(
         max_steps=train_cfg.get("max_steps", 500000),
+        max_epochs=-1,
         accelerator="gpu",
         devices=devices,
         strategy=strategy,
         precision=train_cfg.get("precision", "bf16-mixed"),
-        accumulate_grad_batches=train_cfg.get("accumulate_grad_batches", 4),
+        accumulate_grad_batches=accum,
         gradient_clip_val=train_cfg.get("gradient_clip_val", 1.0),
         log_every_n_steps=train_cfg.get("log_every_n_steps", 100),
-        val_check_interval=train_cfg.get("val_check_interval", 5000),
+        val_check_interval=val_interval_batches,
+        check_val_every_n_epoch=None,
         callbacks=callbacks,
         logger=logger,
         benchmark=train_cfg.get("benchmark", True),
